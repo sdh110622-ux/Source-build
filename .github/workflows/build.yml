@@ -11,10 +11,11 @@ jobs:
       - name: Unzip Source
         run: |
           unzip "Free Src iOS By;SAQER.zip" -d MyESP
-          echo "=== Root Structure ==="
+          echo "=== Contents ==="
           ls -la MyESP/
-          echo "=== Deep Structure ==="
-          find MyESP -maxdepth 3 -type f -name "*.h" | head -20
+          EXTRACTED=$(ls MyESP/ | head -1)
+          echo "EXTRACTED_DIR=$EXTRACTED" >> $GITHUB_ENV
+          echo "Found: $EXTRACTED"
 
       - name: Setup Theos
         run: |
@@ -47,42 +48,30 @@ jobs:
 
       - name: Detect Structure
         run: |
-          cd MyESP
-          # Includes.h dhundo
-          INCLUDES=$(find . -name "Includes.h" | head -1)
+          BASE="MyESP/${{ env.EXTRACTED_DIR }}"
+          echo "BASE=$BASE" >> $GITHUB_ENV
+          echo "=== Base Structure ==="
+          ls -la "$BASE"
+
+          INCLUDES=$(find "$BASE" -name "Includes.h" | head -1)
           echo "INCLUDES_PATH=$INCLUDES" >> $GITHUB_ENV
-          echo "Found Includes.h: $INCLUDES"
+          echo "Includes.h: $INCLUDES"
 
-          # Project root dhundo — jahan Makefile ya .mm files hain
-          MM_FILE=$(find . -name "*.mm" | head -1)
-          PROJECT_ROOT=$(dirname "$MM_FILE")
-          # Ek level upar jao agar ESP/ andar mila
-          if [[ "$PROJECT_ROOT" == *"/ESP" ]]; then
-            PROJECT_ROOT=$(dirname "$PROJECT_ROOT")
-          fi
-          echo "PROJECT_ROOT=$PROJECT_ROOT" >> $GITHUB_ENV
-          echo "Detected project root: $PROJECT_ROOT"
-
-          # ESP folder dhundo
-          ESP_DIR=$(find . -type d -name "ESP" | head -1)
+          ESP_DIR=$(find "$BASE" -type d -name "ESP" | head -1)
           echo "ESP_DIR=$ESP_DIR" >> $GITHUB_ENV
-          echo "ESP dir: $ESP_DIR"
+          echo "ESP: $ESP_DIR"
 
-          # KittyMemory folder
-          KITTY_DIR=$(find . -type d -name "KittyMemory" | head -1)
+          KITTY_DIR=$(find "$BASE" -type d -name "KittyMemory" | head -1)
           echo "KITTY_DIR=$KITTY_DIR" >> $GITHUB_ENV
-          echo "KittyMemory dir: $KITTY_DIR"
+          echo "KittyMemory: $KITTY_DIR"
 
-          # SDK folder
-          SDK_DIR=$(find . -type d -name "SDK" | head -1)
+          SDK_DIR=$(find "$BASE" -type d -name "SDK" | head -1)
           echo "SDK_DIR=$SDK_DIR" >> $GITHUB_ENV
-          echo "SDK dir: $SDK_DIR"
+          echo "SDK: $SDK_DIR"
 
       - name: Fix Includes
         run: |
-          cd MyESP
           INCLUDES="${{ env.INCLUDES_PATH }}"
-          echo "Fixing: $INCLUDES"
           if [ -f "$INCLUDES" ]; then
             sed -i '' 's/#define LOGD.*//g' "$INCLUDES"
             sed -i '' 's/#define LOGE.*//g' "$INCLUDES"
@@ -96,15 +85,14 @@ jobs:
 
       - name: Fix Makefile
         run: |
-          cd MyESP
-          PROJECT="${{ env.PROJECT_ROOT }}"
+          BASE="${{ env.BASE }}"
           ESP="${{ env.ESP_DIR }}"
           KITTY="${{ env.KITTY_DIR }}"
           SDK="${{ env.SDK_DIR }}"
 
-          echo "Writing Makefile to: $PROJECT/Makefile"
+          echo "Writing Makefile to: $BASE/Makefile"
 
-          cat > "$PROJECT/Makefile" << EOF
+          cat > "$BASE/Makefile" << EOF
           TARGET = iphone:clang:latest:14.0
           ARCHS = arm64
           DEBUG = 0
@@ -147,18 +135,18 @@ jobs:
           EOF
 
           echo "=== Makefile ==="
-          cat "$PROJECT/Makefile"
+          cat "$BASE/Makefile"
 
       - name: Install ldid
         run: brew install ldid
 
       - name: Build Dylib
         run: |
-          cd MyESP/${{ env.PROJECT_ROOT }}
+          cd "${{ env.BASE }}"
           make clean
           make 2>&1
 
-      - name: Find and Upload Dylib
+      - name: Find Dylib
         run: |
           mkdir -p /tmp/output
           find MyESP -name "*.dylib" -exec cp {} /tmp/output/ \;
