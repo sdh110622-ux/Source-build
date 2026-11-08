@@ -11,6 +11,10 @@ jobs:
       - name: Unzip Source
         run: |
           unzip "Free Src iOS By;SAQER.zip" -d MyESP
+          echo "=== Root Structure ==="
+          ls -la MyESP/
+          echo "=== Deep Structure ==="
+          find MyESP -maxdepth 3 -type f -name "*.h" | head -20
 
       - name: Setup Theos
         run: |
@@ -41,75 +45,129 @@ jobs:
           cp $(find . -name "*.a" | head -1) $HOME/theos/lib/libdobby.a
           cp /tmp/Dobby/include/dobby.h $HOME/theos/include/
 
+      - name: Detect Structure
+        run: |
+          cd MyESP
+          # Includes.h dhundo
+          INCLUDES=$(find . -name "Includes.h" | head -1)
+          echo "INCLUDES_PATH=$INCLUDES" >> $GITHUB_ENV
+          echo "Found Includes.h: $INCLUDES"
+
+          # Project root dhundo — jahan Makefile ya .mm files hain
+          MM_FILE=$(find . -name "*.mm" | head -1)
+          PROJECT_ROOT=$(dirname "$MM_FILE")
+          # Ek level upar jao agar ESP/ andar mila
+          if [[ "$PROJECT_ROOT" == *"/ESP" ]]; then
+            PROJECT_ROOT=$(dirname "$PROJECT_ROOT")
+          fi
+          echo "PROJECT_ROOT=$PROJECT_ROOT" >> $GITHUB_ENV
+          echo "Detected project root: $PROJECT_ROOT"
+
+          # ESP folder dhundo
+          ESP_DIR=$(find . -type d -name "ESP" | head -1)
+          echo "ESP_DIR=$ESP_DIR" >> $GITHUB_ENV
+          echo "ESP dir: $ESP_DIR"
+
+          # KittyMemory folder
+          KITTY_DIR=$(find . -type d -name "KittyMemory" | head -1)
+          echo "KITTY_DIR=$KITTY_DIR" >> $GITHUB_ENV
+          echo "KittyMemory dir: $KITTY_DIR"
+
+          # SDK folder
+          SDK_DIR=$(find . -type d -name "SDK" | head -1)
+          echo "SDK_DIR=$SDK_DIR" >> $GITHUB_ENV
+          echo "SDK dir: $SDK_DIR"
+
       - name: Fix Includes
         run: |
           cd MyESP
-          sed -i '' 's/#define LOGD.*//g' ESP/Includes.h
-          sed -i '' 's/#define LOGE.*//g' ESP/Includes.h
-          sed -i '' 's/#define LOGI.*//g' ESP/Includes.h
-          sed -i '' 's/#define LOGW.*//g' ESP/Includes.h
-          sed -i '' 's/#include.*android_log.*//g' ESP/Includes.h
+          INCLUDES="${{ env.INCLUDES_PATH }}"
+          echo "Fixing: $INCLUDES"
+          if [ -f "$INCLUDES" ]; then
+            sed -i '' 's/#define LOGD.*//g' "$INCLUDES"
+            sed -i '' 's/#define LOGE.*//g' "$INCLUDES"
+            sed -i '' 's/#define LOGI.*//g' "$INCLUDES"
+            sed -i '' 's/#define LOGW.*//g' "$INCLUDES"
+            sed -i '' 's/#include.*android_log.*//g' "$INCLUDES"
+            echo "Fixed OK"
+          else
+            echo "Includes.h nahi mila — skipping"
+          fi
 
       - name: Fix Makefile
         run: |
           cd MyESP
-          cat > Makefile << 'EOF'
+          PROJECT="${{ env.PROJECT_ROOT }}"
+          ESP="${{ env.ESP_DIR }}"
+          KITTY="${{ env.KITTY_DIR }}"
+          SDK="${{ env.SDK_DIR }}"
+
+          echo "Writing Makefile to: $PROJECT/Makefile"
+
+          cat > "$PROJECT/Makefile" << EOF
           TARGET = iphone:clang:latest:14.0
           ARCHS = arm64
           DEBUG = 0
           FINALPACKAGE = 1
 
-          include $(THEOS)/makefiles/common.mk
+          include \$(THEOS)/makefiles/common.mk
 
           TWEAK_NAME = ESP
 
-          ESP_FILES = $(wildcard ESP/*.mm) \
-                      $(wildcard ESP/*.cpp) \
-                      $(wildcard ESP/imgui/*.mm) \
-                      $(wildcard ESP/imgui/*.cpp) \
-                      $(wildcard KittyMemory/*.cpp) \
-                      $(wildcard SDK/*.cpp)
+          ESP_FILES = \$(wildcard $ESP/*.mm) \\
+                      \$(wildcard $ESP/*.cpp) \\
+                      \$(wildcard $ESP/imgui/*.mm) \\
+                      \$(wildcard $ESP/imgui/*.cpp) \\
+                      \$(wildcard $KITTY/*.cpp) \\
+                      \$(wildcard $SDK/*.cpp)
 
-          ESP_FRAMEWORKS = IOKit UIKit Foundation Security \
-                           QuartzCore CoreGraphics CoreText \
-                           AVFoundation Accelerate GLKit \
-                           SystemConfiguration GameController \
+          ESP_FRAMEWORKS = IOKit UIKit Foundation Security \\
+                           QuartzCore CoreGraphics CoreText \\
+                           AVFoundation Accelerate GLKit \\
+                           SystemConfiguration GameController \\
                            Metal MetalKit
 
-          ESP_CCFLAGS = -w -std=gnu++17 -fno-rtti -fno-exceptions \
-                        -O2 -ffunction-sections -fdata-sections \
-                        -DNDEBUG -Wno-module-import-in-extern-c \
-                        -I$(THEOS_PROJECT_DIR) \
-                        -I$(THEOS_PROJECT_DIR)/ESP \
-                        -I$(THEOS_PROJECT_DIR)/ESP/imgui \
-                        -I$(THEOS_PROJECT_DIR)/KittyMemory \
-                        -I$(THEOS_PROJECT_DIR)/SDK
+          ESP_CCFLAGS = -w -std=gnu++17 -fno-rtti -fno-exceptions \\
+                        -O2 -ffunction-sections -fdata-sections \\
+                        -DNDEBUG -Wno-module-import-in-extern-c \\
+                        -I\$(THEOS_PROJECT_DIR) \\
+                        -I$ESP \\
+                        -I$ESP/imgui \\
+                        -I$KITTY \\
+                        -I$SDK
 
-          ESP_CFLAGS = -w -fobjc-arc \
-                       -Wno-deprecated-declarations \
-                       -Wno-unused-variable \
+          ESP_CFLAGS = -w -fobjc-arc \\
+                       -Wno-deprecated-declarations \\
+                       -Wno-unused-variable \\
                        -Wno-unused-value
 
           ESP_LDFLAGS = -ldobby -Wl,-dead_strip
 
-          include $(THEOS_MAKE_PATH)/tweak.mk
+          include \$(THEOS_MAKE_PATH)/tweak.mk
           EOF
+
+          echo "=== Makefile ==="
+          cat "$PROJECT/Makefile"
 
       - name: Install ldid
         run: brew install ldid
 
       - name: Build Dylib
         run: |
-          cd MyESP
+          cd MyESP/${{ env.PROJECT_ROOT }}
           make clean
           make 2>&1
 
-      - name: Upload Dylib
+      - name: Find and Upload Dylib
+        run: |
+          mkdir -p /tmp/output
+          find MyESP -name "*.dylib" -exec cp {} /tmp/output/ \;
+          echo "=== Output ==="
+          ls -la /tmp/output/
+
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ESP-dylib
-          path: |
-            MyESP/.theos/obj/
-            MyESP/packages/
+          path: /tmp/output/
           if-no-files-found: warn
-
