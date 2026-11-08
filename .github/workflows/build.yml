@@ -11,11 +11,10 @@ jobs:
       - name: Unzip Source
         run: |
           unzip "Free Src iOS By;SAQER.zip" -d MyESP
-          echo "=== Contents ==="
-          ls -la MyESP/
-          EXTRACTED=$(ls MyESP/ | head -1)
-          echo "EXTRACTED_DIR=$EXTRACTED" >> $GITHUB_ENV
-          echo "Found: $EXTRACTED"
+          mv "MyESP/Free Src iOS By;SAQER" "MyESP/src"
+          echo "EXTRACTED_DIR=src" >> $GITHUB_ENV
+          echo "=== Structure ==="
+          ls -la MyESP/src/
 
       - name: Setup Theos
         run: |
@@ -46,32 +45,10 @@ jobs:
           cp $(find . -name "*.a" | head -1) $HOME/theos/lib/libdobby.a
           cp /tmp/Dobby/include/dobby.h $HOME/theos/include/
 
-      - name: Detect Structure
-        run: |
-          BASE="MyESP/${{ env.EXTRACTED_DIR }}"
-          echo "BASE=$BASE" >> $GITHUB_ENV
-          echo "=== Base Structure ==="
-          ls -la "$BASE"
-
-          INCLUDES=$(find "$BASE" -name "Includes.h" | head -1)
-          echo "INCLUDES_PATH=$INCLUDES" >> $GITHUB_ENV
-          echo "Includes.h: $INCLUDES"
-
-          ESP_DIR=$(find "$BASE" -type d -name "ESP" | head -1)
-          echo "ESP_DIR=$ESP_DIR" >> $GITHUB_ENV
-          echo "ESP: $ESP_DIR"
-
-          KITTY_DIR=$(find "$BASE" -type d -name "KittyMemory" | head -1)
-          echo "KITTY_DIR=$KITTY_DIR" >> $GITHUB_ENV
-          echo "KittyMemory: $KITTY_DIR"
-
-          SDK_DIR=$(find "$BASE" -type d -name "SDK" | head -1)
-          echo "SDK_DIR=$SDK_DIR" >> $GITHUB_ENV
-          echo "SDK: $SDK_DIR"
-
       - name: Fix Includes
         run: |
-          INCLUDES="${{ env.INCLUDES_PATH }}"
+          INCLUDES=$(find MyESP/src -name "Includes.h" | head -1)
+          echo "Found: $INCLUDES"
           if [ -f "$INCLUDES" ]; then
             sed -i '' 's/#define LOGD.*//g' "$INCLUDES"
             sed -i '' 's/#define LOGE.*//g' "$INCLUDES"
@@ -80,69 +57,66 @@ jobs:
             sed -i '' 's/#include.*android_log.*//g' "$INCLUDES"
             echo "Fixed OK"
           else
-            echo "Includes.h nahi mila — skipping"
+            echo "Includes.h nahi mila"
           fi
 
       - name: Fix Makefile
         run: |
-          BASE="${{ env.BASE }}"
-          ESP="${{ env.ESP_DIR }}"
-          KITTY="${{ env.KITTY_DIR }}"
-          SDK="${{ env.SDK_DIR }}"
-
-          echo "Writing Makefile to: $BASE/Makefile"
-
-          cat > "$BASE/Makefile" << EOF
+          cat > MyESP/src/Makefile << 'EOF'
           TARGET = iphone:clang:latest:14.0
           ARCHS = arm64
           DEBUG = 0
           FINALPACKAGE = 1
 
-          include \$(THEOS)/makefiles/common.mk
+          include $(THEOS)/makefiles/common.mk
 
           TWEAK_NAME = ESP
 
-          ESP_FILES = \$(wildcard $ESP/*.mm) \\
-                      \$(wildcard $ESP/*.cpp) \\
-                      \$(wildcard $ESP/imgui/*.mm) \\
-                      \$(wildcard $ESP/imgui/*.cpp) \\
-                      \$(wildcard $KITTY/*.cpp) \\
-                      \$(wildcard $SDK/*.cpp)
+          ESP_FILES = $(wildcard ESP/*.mm) \
+                      $(wildcard ESP/*.cpp) \
+                      $(wildcard ESP/imgui/*.mm) \
+                      $(wildcard ESP/imgui/*.cpp) \
+                      $(wildcard KittyMemory/*.cpp) \
+                      $(wildcard SDK/*.cpp)
 
-          ESP_FRAMEWORKS = IOKit UIKit Foundation Security \\
-                           QuartzCore CoreGraphics CoreText \\
-                           AVFoundation Accelerate GLKit \\
-                           SystemConfiguration GameController \\
+          ESP_FRAMEWORKS = IOKit UIKit Foundation Security \
+                           QuartzCore CoreGraphics CoreText \
+                           AVFoundation Accelerate GLKit \
+                           SystemConfiguration GameController \
                            Metal MetalKit
 
-          ESP_CCFLAGS = -w -std=gnu++17 -fno-rtti -fno-exceptions \\
-                        -O2 -ffunction-sections -fdata-sections \\
-                        -DNDEBUG -Wno-module-import-in-extern-c \\
-                        -I\$(THEOS_PROJECT_DIR) \\
-                        -I$ESP \\
-                        -I$ESP/imgui \\
-                        -I$KITTY \\
-                        -I$SDK
+          ESP_CCFLAGS = -w -std=gnu++17 -fno-rtti -fno-exceptions \
+                        -O2 -ffunction-sections -fdata-sections \
+                        -DNDEBUG -Wno-module-import-in-extern-c \
+                        -I$(THEOS_PROJECT_DIR) \
+                        -I$(THEOS_PROJECT_DIR)/ESP \
+                        -I$(THEOS_PROJECT_DIR)/ESP/imgui \
+                        -I$(THEOS_PROJECT_DIR)/KittyMemory \
+                        -I$(THEOS_PROJECT_DIR)/SDK
 
-          ESP_CFLAGS = -w -fobjc-arc \\
-                       -Wno-deprecated-declarations \\
-                       -Wno-unused-variable \\
+          ESP_CFLAGS = -w -fobjc-arc \
+                       -Wno-deprecated-declarations \
+                       -Wno-unused-variable \
                        -Wno-unused-value
 
           ESP_LDFLAGS = -ldobby -Wl,-dead_strip
 
-          include \$(THEOS_MAKE_PATH)/tweak.mk
+          include $(THEOS_MAKE_PATH)/tweak.mk
           EOF
 
           echo "=== Makefile ==="
-          cat "$BASE/Makefile"
+          cat MyESP/src/Makefile
+          echo "=== Files check ==="
+          ls MyESP/src/ESP/ | head -10
+          ls MyESP/src/KittyMemory/
+          ls MyESP/src/SDK/ | head -5
 
       - name: Install ldid
         run: brew install ldid
 
       - name: Build Dylib
         run: |
-          cd "${{ env.BASE }}"
+          cd MyESP/src
           make clean
           make 2>&1
 
