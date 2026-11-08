@@ -7,35 +7,41 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Unzip Source
         run: |
           ls -la
           unzip "Free Src iOS By;SAQER.zip" -d MyESP
           ls MyESP
-          
+
       - name: Setup Theos
         run: |
           git clone --recursive https://github.com/theos/theos.git $HOME/theos
           echo "THEOS=$HOME/theos" >> $GITHUB_ENV
           echo "$HOME/theos/bin" >> $GITHUB_PATH
-          
+
       - name: Install SDK
         run: |
           git clone --depth=1 https://github.com/theos/sdks.git /tmp/sdks
           rsync -a /tmp/sdks/iPhoneOS*.sdk $HOME/theos/sdks/
           ls $HOME/theos/sdks/
-          
+
       - name: Install Dobby
         run: |
-          curl -L -o /tmp/dobby.zip "https://github.com/jmpews/Dobby/releases/download/v1.0/dobby_ios.zip"
-          unzip /tmp/dobby.zip -d /tmp/dobby
-          ls /tmp/dobby
-          find /tmp/dobby -name "*.a" -o -name "*.dylib" 2>/dev/null
-          cp /tmp/dobby/libdobby.a $HOME/theos/lib/ 2>/dev/null || \
-          find /tmp/dobby -name "libdobby*" -exec cp {} $HOME/theos/lib/ \;
+          git clone https://github.com/jmpews/Dobby.git /tmp/Dobby
+          cd /tmp/Dobby
+          mkdir build && cd build
+          cmake .. \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE=/tmp/Dobby/cmake/ios.toolchain.cmake \
+            -DPLATFORM=OS64 \
+            -DDEPLOYMENT_TARGET=14.0
+          make -j4
+          find /tmp/Dobby -name "libdobby.a" 2>/dev/null
+          cp /tmp/Dobby/build/libdobby.a $HOME/theos/lib/
+          cp /tmp/Dobby/include/dobby.h $HOME/theos/include/
           ls $HOME/theos/lib/ | grep dobby
-          
+
       - name: Fix Includes
         run: |
           cd MyESP
@@ -44,7 +50,7 @@ jobs:
           sed -i '' 's/#define LOGI.*//g' ESP/Includes.h
           sed -i '' 's/#define LOGW.*//g' ESP/Includes.h
           sed -i '' 's/#include.*android_log.*//g' ESP/Includes.h
-          
+
       - name: Fix Makefile
         run: |
           cd MyESP
@@ -94,7 +100,7 @@ jobs:
           cd MyESP
           make clean
           make 2>&1
-          
+
       - name: Find and Copy Dylib
         run: |
           echo "=== Searching ==="
@@ -102,7 +108,7 @@ jobs:
           mkdir -p /tmp/output
           find MyESP -name "*.dylib" -exec cp {} /tmp/output/ \;
           ls -la /tmp/output/
-          
+
       - name: Upload Dylib
         uses: actions/upload-artifact@v4
         with:
