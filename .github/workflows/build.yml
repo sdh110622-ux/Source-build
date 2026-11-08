@@ -20,11 +20,13 @@ jobs:
           echo "THEOS=$HOME/theos" >> $GITHUB_ENV
           echo "$HOME/theos/bin" >> $GITHUB_PATH
           
-      - name: Install SDK
+            - name: Install SDK
         run: |
           git clone --depth=1 https://github.com/theos/sdks.git /tmp/sdks
-          cp -r /tmp/sdks/*.sdk $HOME/theos/sdks/
+          ls /tmp/sdks/
+          rsync -a /tmp/sdks/iPhoneOS*.sdk $HOME/theos/sdks/
           ls $HOME/theos/sdks/
+
           
       - name: Fix Includes
         run: |
