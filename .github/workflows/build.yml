@@ -10,9 +10,7 @@ jobs:
 
       - name: Unzip Source
         run: |
-          ls -la
           unzip "Free Src iOS By;SAQER.zip" -d MyESP
-          ls MyESP
 
       - name: Setup Theos
         run: |
@@ -24,13 +22,11 @@ jobs:
         run: |
           git clone --depth=1 https://github.com/theos/sdks.git /tmp/sdks
           rsync -a /tmp/sdks/iPhoneOS*.sdk $HOME/theos/sdks/
-          ls $HOME/theos/sdks/
 
       - name: Install Dobby
         run: |
           git clone https://github.com/jmpews/Dobby.git /tmp/Dobby
-          cd /tmp/Dobby
-          mkdir build && cd build
+          cd /tmp/Dobby && mkdir build && cd build
           cmake .. \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_SYSTEM_NAME=iOS \
@@ -41,11 +37,9 @@ jobs:
             -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 \
             -DCMAKE_OSX_SYSROOT=$(xcrun --sdk iphoneos --show-sdk-path) \
             -DDOBBY_DEBUG=OFF
-          make -j4
-          find /tmp/Dobby/build -name "*.a" 2>/dev/null
-          cp $(find /tmp/Dobby/build -name "*.a" | head -1) $HOME/theos/lib/libdobby.a
+          make -j$(sysctl -n hw.ncpu)
+          cp $(find . -name "*.a" | head -1) $HOME/theos/lib/libdobby.a
           cp /tmp/Dobby/include/dobby.h $HOME/theos/include/
-          ls $HOME/theos/lib/ | grep dobby
 
       - name: Fix Includes
         run: |
@@ -83,6 +77,7 @@ jobs:
                            Metal MetalKit
 
           ESP_CCFLAGS = -w -std=gnu++17 -fno-rtti -fno-exceptions \
+                        -O2 -ffunction-sections -fdata-sections \
                         -DNDEBUG -Wno-module-import-in-extern-c \
                         -I$(THEOS_PROJECT_DIR) \
                         -I$(THEOS_PROJECT_DIR)/ESP \
@@ -95,16 +90,13 @@ jobs:
                        -Wno-unused-variable \
                        -Wno-unused-value
 
-          ESP_LDFLAGS = -ldobby
+          ESP_LDFLAGS = -ldobby -Wl,-dead_strip
 
           include $(THEOS_MAKE_PATH)/tweak.mk
           EOF
 
       - name: Install ldid
-        run: |
-          brew install ldid
-          which ldid
-          ldid -h > /dev/null && echo "ldid OK"
+        run: brew install ldid
 
       - name: Build Dylib
         run: |
@@ -112,17 +104,12 @@ jobs:
           make clean
           make 2>&1
 
-      - name: Find and Copy Dylib
-        run: |
-          echo "=== Searching ==="
-          find MyESP -name "*.dylib" 2>/dev/null
-          mkdir -p /tmp/output
-          find MyESP -name "*.dylib" -exec cp {} /tmp/output/ \;
-          ls -la /tmp/output/
-
       - name: Upload Dylib
         uses: actions/upload-artifact@v4
         with:
           name: ESP-dylib
-          path: /tmp/output/
+          path: |
+            MyESP/.theos/obj/
+            MyESP/packages/
           if-no-files-found: warn
+
