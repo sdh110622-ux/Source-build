@@ -1,0 +1,45 @@
+name: Build ESP Dylib
+
+on: [push]
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Unzip Source
+        run: |
+          unzip "Free_Src_iOS_By_SAQER.zip" -d MyESP
+          ls MyESP
+          
+      - name: Setup Theos
+        run: |
+          git clone --recursive https://github.com/theos/theos.git $HOME/theos
+          echo "THEOS=$HOME/theos" >> $GITHUB_ENV
+          echo "$HOME/theos/bin" >> $GITHUB_PATH
+          
+      - name: Install SDK
+        run: |
+          curl -L -o sdk.tar.xz "https://github.com/theos/sdks/releases/download/2024/iPhoneOS16.5.sdk.tar.xz"
+          tar -xf sdk.tar.xz -C $HOME/theos/sdks/
+          
+      - name: Build Dylib
+        run: |
+          cd MyESP
+          make clean
+          make
+          
+      - name: Find Dylib
+        run: |
+          find MyESP -name "*.dylib" 2>/dev/null
+          find MyESP -name "*.dylib" -exec cp {} /tmp/ \;
+          
+      - name: Upload Dylib
+        uses: actions/upload-artifact@v3
+        with:
+          name: ESP-dylib
+          path: |
+            /tmp/*.dylib
+            MyESP/.theos/obj/**/*.dylib
+            MyESP/obj/**/*.dylib
