@@ -23,9 +23,18 @@ jobs:
       - name: Install SDK
         run: |
           git clone --depth=1 https://github.com/theos/sdks.git /tmp/sdks
-          ls /tmp/sdks/
           rsync -a /tmp/sdks/iPhoneOS*.sdk $HOME/theos/sdks/
           ls $HOME/theos/sdks/
+          
+      - name: Install Dobby
+        run: |
+          curl -L -o /tmp/dobby.zip "https://github.com/jmpews/Dobby/releases/download/v1.0/dobby_ios.zip"
+          unzip /tmp/dobby.zip -d /tmp/dobby
+          ls /tmp/dobby
+          find /tmp/dobby -name "*.a" -o -name "*.dylib" 2>/dev/null
+          cp /tmp/dobby/libdobby.a $HOME/theos/lib/ 2>/dev/null || \
+          find /tmp/dobby -name "libdobby*" -exec cp {} $HOME/theos/lib/ \;
+          ls $HOME/theos/lib/ | grep dobby
           
       - name: Fix Includes
         run: |
