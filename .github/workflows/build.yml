@@ -33,11 +33,12 @@ jobs:
           mkdir build && cd build
           cmake .. \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_TOOLCHAIN_FILE=/tmp/Dobby/cmake/ios.toolchain.cmake \
-            -DPLATFORM=OS64 \
-            -DDEPLOYMENT_TARGET=14.0
+            -DCMAKE_SYSTEM_NAME=iOS \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 \
+            -DCMAKE_OSX_SYSROOT=$(xcrun --sdk iphoneos --show-sdk-path)
           make -j4
-          find /tmp/Dobby -name "libdobby.a" 2>/dev/null
+          find /tmp/Dobby/build -name "libdobby.a"
           cp /tmp/Dobby/build/libdobby.a $HOME/theos/lib/
           cp /tmp/Dobby/include/dobby.h $HOME/theos/include/
           ls $HOME/theos/lib/ | grep dobby
