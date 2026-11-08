@@ -10,7 +10,8 @@ jobs:
       
       - name: Unzip Source
         run: |
-          unzip "Free_Src_iOS_By_SAQER.zip" -d MyESP
+          ls -la
+          unzip "Free Src iOS By;SAQER.zip" -d MyESP
           ls MyESP
           
       - name: Setup Theos
